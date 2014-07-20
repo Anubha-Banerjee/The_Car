@@ -1,0 +1,393 @@
+#define FREEGLUT_STATIC
+
+#include<GLTools.h>
+#include<GL/glut.h>
+#include<GLMatrixStack.h>
+#include<GLGeometryTransform.h>
+#include<stopWatch.h>
+#include<iostream>
+#include <GLFrustum.h>
+#include "header.h"
+
+using namespace std;
+
+GLBatch light,wheel_in,wheel_out,seats,tail,head,body,ground,trunk,leaves;
+GLint shader,locNM,locMVP,locMV,locLight,locTexture,locAmb,locDiff,locSpec,locMaterial,locShine,locSign,locNoShine;
+GLGeometryTransform transformPipeline;
+GLMatrixStack modelViewMatrix,projectionMatrix;
+GLuint Tex,Tex_paint,Tex_seat,Tex_tail,Tex_head,Tex_metal,Tex_grass,Tex_bark,Tex_green;
+GLFrame cameraFrame,carFrame;
+M3DMatrix44f mCamera, mCameraCar;
+GLFrustum viewFrustum;	
+float len=1280,wide=1024;
+
+
+
+// vertex arrays read from obj file (containing only distinct vertices)
+component *v,*vn,*vt;
+
+// the final vertics given to openGL
+M3DVector3f *Ver;
+M3DVector3f *Normals;
+M3DVector2f *vTexCoords; 				
+
+
+bool LoadTGATexture(const char *szFileName, GLenum minFilter, GLenum magFilter, GLenum wrapMode)
+{
+	GLbyte *pBits;
+	int nWidth, nHeight, nComponents;
+	GLenum eFormat;
+	
+	// Read the texture bits
+	pBits = gltReadTGABits(szFileName, &nWidth, &nHeight, &nComponents, &eFormat);
+	if(pBits == NULL) 
+		return false;
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+    
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexImage2D(GL_TEXTURE_2D, 0, nComponents, nWidth, nHeight, 0,
+				 eFormat, GL_UNSIGNED_BYTE, pBits);
+	
+    free(pBits);
+    
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR || 
+       minFilter == GL_LINEAR_MIPMAP_NEAREST ||
+       minFilter == GL_NEAREST_MIPMAP_LINEAR ||
+       minFilter == GL_NEAREST_MIPMAP_NEAREST)
+       glGenerateMipmap(GL_TEXTURE_2D);    
+	return true;
+}
+void freePointers()
+{
+	free(v);
+	free(vn);
+	free(vt);
+	free(Ver);
+	free(Normals);
+	free(vTexCoords);
+
+}
+void fillBuffer(char fname[40],GLBatch *batch)
+{
+
+	FILE *fp;
+	fp=fopen(fname,"r+");
+	int total_ver=loadMesh(fp);	
+	fclose(fp);
+	GLBatch b;
+
+	
+	batch->Begin(GL_TRIANGLES,total_ver,1);
+	batch->CopyVertexData3f(Ver);
+	batch->CopyTexCoordData2f(vTexCoords,0);
+	batch->CopyNormalDataf(Normals);	
+	batch->End();
+
+	freePointers();
+}
+
+void drawPoint(float x, float y)
+{
+	glPointSize(10);
+	glBegin(GL_POINTS);
+	glVertex2f(x, y);
+	glEnd();
+	glFlush(); 
+}
+
+GLfloat fanVer[][3]=
+	
+	{
+		0,0,0,
+	   -0.02,0.1,0,
+		0.02,0.1,0,	
+	};
+
+	GLfloat fanNormals[][3]=
+	{
+		0,0,1,
+		0,0,1,
+		0,0,1
+	};
+
+		GLfloat vTexCoordsFan [] = { 0.0f, 0.0f,
+								 1.0f, 0.0f, 
+								 0, 1 
+								};
+
+void setup()
+{
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+
+	FILE *fp;
+
+		
+	glClearColor(0.4,0.4,0.9,1);
+	//cameraFrame.RotateWorld(-0.2,1,1,0);	
+	cameraFrame.MoveForward(-3000);
+	cameraFrame.MoveUp(60);
+
+	transformPipeline.SetMatrixStacks(modelViewMatrix,projectionMatrix);
+		
+	viewFrustum.SetPerspective(35.0f, float(len)/float(wide),1, 5000);
+	projectionMatrix.LoadMatrix(viewFrustum.GetProjectionMatrix());
+
+	int total_ver;
+	fillBuffer("exterior.obj",&body);
+
+	fillBuffer("wheel_int.obj",&wheel_in);
+
+	fillBuffer("wheel_out.obj",&wheel_out);
+	
+	fillBuffer("interior.obj",&seats);
+
+	fillBuffer("taillight.obj",&tail);	
+
+	fillBuffer("headLight.obj",&head);
+
+	fillBuffer("ground.obj",&ground);
+
+	fillBuffer("trunk.obj",&trunk);
+
+	fillBuffer("leaves.obj",&leaves);
+
+	light.Begin(GL_TRIANGLES,3,1);
+	light.CopyVertexData3f(fanVer);
+	light.CopyTexCoordData2f(vTexCoordsFan,0);
+	light.CopyNormalDataf(fanNormals);	
+	light.End();
+
+	
+	shader=gltLoadShaderPairWithAttributes("ver.vp","frag.fp",3,GLT_ATTRIBUTE_VERTEX,"vPosition",GLT_ATTRIBUTE_NORMAL,"vNormal",GLT_ATTRIBUTE_TEXTURE0,"vTexture");
+	locNM=glGetUniformLocation(shader,"normalMatrix");
+	locMVP=glGetUniformLocation(shader,"mvpMatrix");
+	locMV=glGetUniformLocation(shader,"mvMatrix");
+	locLight=glGetUniformLocation(shader,"lightPosition");
+	locTexture=glGetUniformLocation(shader,"colorMap2D");
+	locDiff=glGetUniformLocation(shader,"diffLight");
+	locAmb=glGetUniformLocation(shader,"ambLight");
+	locSpec=glGetUniformLocation(shader,"specLight");
+	locShine=glGetUniformLocation(shader,"shininess");
+	locMaterial=glGetUniformLocation(shader,"material");
+	locMaterial=glGetUniformLocation(shader,"material");
+	locSign=glGetUniformLocation(shader,"sign");
+	locNoShine=glGetUniformLocation(shader,"noShine");
+	
+	glGenTextures(1,&Tex_paint);
+	glBindTexture(GL_TEXTURE_2D,Tex_paint);	
+	LoadTGATexture("red.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+
+	glGenTextures(1,&Tex);
+	glBindTexture(GL_TEXTURE_2D,Tex);	
+	LoadTGATexture("wheel.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+
+	glGenTextures(1,&Tex_seat);
+	glBindTexture(GL_TEXTURE_2D,Tex_seat);	
+	LoadTGATexture("seat.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+
+
+	glGenTextures(1,&Tex_tail);
+	glBindTexture(GL_TEXTURE_2D,Tex_tail);	
+	LoadTGATexture("tail.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+	glGenTextures(1,&Tex_head);
+	glBindTexture(GL_TEXTURE_2D,Tex_head);	
+	LoadTGATexture("white.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+
+	glGenTextures(1,&Tex_metal);
+	glBindTexture(GL_TEXTURE_2D,Tex_metal);	
+	LoadTGATexture("metal.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+	
+
+	glGenTextures(1,&Tex_grass);
+	glBindTexture(GL_TEXTURE_2D,Tex_grass);	
+	LoadTGATexture("bigrass.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+
+	glGenTextures(1,&Tex_bark);
+	glBindTexture(GL_TEXTURE_2D,Tex_bark);	
+	LoadTGATexture("brown.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+	glEnable(GL_BLEND);
+ 
+}
+void change()
+{
+	glUniformMatrix3fv(locNM,1,GL_FALSE,transformPipeline.GetNormalMatrix());
+	glUniformMatrix4fv(locMV,1,GL_FALSE,transformPipeline.GetModelViewMatrix());
+	glUniformMatrix4fv(locMVP,1,GL_FALSE,transformPipeline.GetModelViewProjectionMatrix());
+}
+
+void bindDraw(GLBatch *batch,GLuint texName)
+{
+	glBindTexture(GL_TEXTURE_2D,texName);	
+	batch->Draw();
+}
+
+float wa=1;
+float lx=0,ly=-200,lz=-250,acc=0,inc=0,org_z=0,forw=10,moving=0;
+static CStopWatch timer;
+void render()
+{
+	// the more far away the light from surface, more it shines--why? 
+	GLfloat lightPosition[]={lx,ly,lz};
+	GLfloat ambColor[]={0.01,0.01,0.01};
+	GLfloat diffColor[]={1,1,1};
+	GLfloat specColor[]={0.5,0.5,0.5};
+	GLfloat material[]={1,1,1};
+	//float shininess=0;
+	
+
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+
+
+	modelViewMatrix.PushMatrix();	
+	
+	cameraFrame.GetCameraMatrix(mCamera);
+	carFrame.GetCameraMatrix(mCameraCar);
+	modelViewMatrix.MultMatrix(mCamera);
+	
+
+	glUseProgram(shader);
+	glUniform3fv(locLight,1,lightPosition);
+	glUniform3fv(locAmb,1,ambColor);
+	glUniform3fv(locDiff,1,diffColor);
+	glUniform3fv(locSpec,1,specColor);
+	glUniform1f(locShine,120);
+	glUniform3fv(locMaterial,1,material);
+	glUniform1i(locTexture,0);
+	glUniform1i(locSign,-1);		
+	glUniform1f(locNoShine,1);	
+
+	struct attrib
+	{
+		GLfloat ambColor[3];
+		GLfloat diffColor[3];
+		GLfloat specColor[3];
+		GLfloat locShine[3];
+		GLfloat locMaterial[3];
+		float shininess;
+		float noShine;
+		float scaling[3];
+ 
+	};
+	
+	
+	modelViewMatrix.PushMatrix();
+	modelViewMatrix.MultMatrix(mCameraCar);
+	
+	
+	modelViewMatrix.PushMatrix();
+	modelViewMatrix.Scale(10,1,4);
+	glUniform1f(locNoShine,1);
+	change();
+	bindDraw(&ground,Tex_grass);
+	modelViewMatrix.PopMatrix();
+	change();
+
+	bindDraw(&trunk,Tex_bark);
+	bindDraw(&leaves,Tex_grass);
+	modelViewMatrix.PopMatrix();	
+
+
+	glUniform1f(locNoShine,0);	
+	modelViewMatrix.Rotate(180,0,1,0);	
+	modelViewMatrix.Translate(0,0,-2500);	
+	//modelViewMatrix.Rotate(30,0,1,0);	
+	
+	change();
+	bindDraw(&body,Tex_paint);
+	bindDraw(&seats,Tex_seat);	
+	bindDraw(&tail,Tex_tail);	
+	bindDraw(&head,Tex_head);
+
+	
+
+	modelViewMatrix.PushMatrix();
+	modelViewMatrix.Translate(0,org_z+13,org_z+57);
+	modelViewMatrix.Rotate(inc*3,1,0,0);	
+	modelViewMatrix.Translate(0,-(org_z+13),0);	
+	change();
+	bindDraw(&wheel_in,Tex_metal);
+	bindDraw(&wheel_out,Tex);
+	modelViewMatrix.PopMatrix();
+
+		
+	modelViewMatrix.PushMatrix();
+	modelViewMatrix.Translate(0,org_z+13,org_z-57);
+
+	modelViewMatrix.Rotate(inc*3,1,0,0);	
+	modelViewMatrix.Translate(0,-(org_z+13),0);	
+	change();
+	bindDraw(&wheel_in,Tex_metal);
+	bindDraw(&wheel_out,Tex);
+	modelViewMatrix.PopMatrix();
+	
+
+	modelViewMatrix.PopMatrix();
+	glutSwapBuffers();
+	glutPostRedisplay();
+	
+}
+
+void keys(int key,int x,int y)
+{
+	moving=0;
+	if(key==GLUT_KEY_UP)
+	{
+		carFrame.MoveForward(forw);
+		inc=inc+0.8;
+	
+	}
+	if(key==GLUT_KEY_DOWN)
+	{
+		
+		
+	}
+
+		if(key==GLUT_KEY_RIGHT)
+	{
+
+		
+
+	}
+	if(key==GLUT_KEY_LEFT)
+	{
+	
+
+	}
+	
+
+}
+void main(int argc,char **argv)
+{
+	glutInit(&argc,argv);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL);
+	glutInitWindowSize(len,wide);
+	glutInitWindowPosition(0,0);
+	glutCreateWindow("table");
+	glutDisplayFunc(render);
+	glutSpecialFunc(keys);
+	
+
+
+	GLenum err=glewInit();
+	if(GLEW_OK!=  err)
+	{
+		fprintf(stderr,"glew errot: %s\n",glewGetErrorString(err));		
+
+	}
+
+	setup();
+	glutMainLoop();
+
+}

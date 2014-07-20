@@ -1,0 +1,21 @@
+
+#version 130
+
+in vec4 vPos;
+in vec3 vNormal;
+
+
+uniform vec4	color;	
+uniform mat4	tmat;
+
+
+smooth out vec4 colorFinal;
+
+void main(void) 
+    { 
+    
+	
+       colorFinal= color;        
+
+       gl_Position=vPos*tmat;
+	}

@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual C++ Express 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Pyramid", "Pyramid\Pyramid.vcproj", "{2B271561-A58E-4980-AA73-EAFE4019C866}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2B271561-A58E-4980-AA73-EAFE4019C866}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2B271561-A58E-4980-AA73-EAFE4019C866}.Debug|Win32.Build.0 = Debug|Win32
+		{2B271561-A58E-4980-AA73-EAFE4019C866}.Release|Win32.ActiveCfg = Release|Win32
+		{2B271561-A58E-4980-AA73-EAFE4019C866}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

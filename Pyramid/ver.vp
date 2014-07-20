@@ -1,0 +1,37 @@
+#version 130
+
+in vec4 vPosition;
+in vec3 vNormal;
+in vec4 vTexture;
+
+
+uniform mat3 normalMatrix;
+uniform mat4 mvMatrix;
+uniform mat4 mvpMatrix;
+uniform mat4 translateToOrg;
+uniform vec3 lightPosition;
+uniform int sign;
+
+out vec3 interpolateNormal;
+out vec3 interpolateLightVector;
+out vec2 textureCoord;
+
+
+void main()
+{
+
+	interpolateNormal=normalMatrix*vNormal*sign;
+	
+	
+	vec4 vPos4=mvMatrix*vPosition;	
+	vec3 vPos3=vPos4.xyz;
+	
+	interpolateLightVector=normalize(lightPosition-vPosition.xyz);
+	
+	
+	vec4 vPositionOrg=translateToOrg*vPosition;
+	
+	gl_Position=mvpMatrix*vPositionOrg;
+	
+	textureCoord=vTexture.st;
+}
